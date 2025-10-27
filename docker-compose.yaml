@@ -1,0 +1,96 @@
+services:
+  nginx:
+    image: docker.io/library/nginx:alpine
+    container_name: nginx
+    restart: always
+    networks:
+      - ai-runtime
+    ports:
+      - "80:8081"
+      # - "8443:443"  # Disabled - SSL not configured
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - open-webui
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    restart: always
+    networks:
+      - ai-runtime
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL}
+      WEBUI_AUTH: "false"
+    volumes:
+      - open-webui:/app/backend/data
+    devices:
+      - nvidia.com/gpu=all
+      
+  invokeai:
+    image: ghcr.io/invoke-ai/invokeai:latest
+    container_name: invokeai
+    restart: always
+    networks:
+      - ai-runtime
+    environment:
+      HUGGINGFACE_HUB_TOKEN: ${HUGGINGFACE_HUB_TOKEN}
+      GPU_DRIVER: "cuda"
+    volumes:
+      - /home/user/developer/ai-runtime/invokeai:/invokeai
+    ports:
+      - "9090:9090"
+    devices:
+      - nvidia.com/gpu=all
+
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:latest
+    container_name: n8n
+    restart: always
+    networks:
+      - ai-runtime
+    environment:
+      DB_TYPE: postgresdb
+      DB_POSTGRESDB_HOST: ${DB_POSTGRESDB_HOST}
+      DB_POSTGRESDB_PORT: 5432
+      DB_POSTGRESDB_DATABASE: n8n
+      DB_POSTGRESDB_USER: postgres
+      DB_POSTGRESDB_PASSWORD: postgres
+      N8N_BASIC_AUTH_ACTIVE: true
+      N8N_BASIC_AUTH_USER: admin
+      N8N_BASIC_AUTH_PASSWORD: admin
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:5678
+      GENERIC_TIMEZONE: UTC
+      N8N_SECURE_COOKIE: false
+    volumes:
+      - n8n_data:/home/node/.n8n
+    ports:
+      - "5678:5678"
+  
+  anythingllm:
+    image: mintplexlabs/anythingllm:latest
+    container_name: anythingllm
+    restart: always
+    networks:
+      - ai-runtime
+    environment:
+      - STORAGE_DIR=/app/server/storage
+    volumes:
+      - /home/user/anythingllm/.env:/app/server/.env
+      - /home/user/anythingllm:/app/server/storage
+    ports:
+      - "3001:3001"
+
+volumes:
+  open-webui:
+  n8n_data:
+
+networks:
+  ai-runtime:
+    driver: bridge
